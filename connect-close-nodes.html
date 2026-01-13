@@ -24,7 +24,7 @@
       id="radiusInp"
       min="2"
       max="15"
-      value="5"
+      value="8"
     />
     <label for="connectDist">Connect Distance</label>
     <input
@@ -36,6 +36,9 @@
       value="150"
     />
     <button id="pause-btn">Pause</button>
+    <p>Total Energy: <span id="tot_energy"></span></p>
+    <p>Total Mass: <span id="tot_mass"></span></p>
+    <p>Temperature: <span id="temperature"></span></p>
     <canvas id="simCanvas"></canvas>
   </body>
 
@@ -51,6 +54,8 @@
     let RADIUS = document.getElementById("radiusInp").value;
     const COLLIDE_DISTANCE = RADIUS * 2;
     const MAX_RAD = 25;
+    const MASS_MAX = 10;
+    const MASS_MIN = 2;
     let nodes = [];
     let waves = [];
 
@@ -66,10 +71,17 @@
       }
     });
 
+    function elasticCollisionVelocity(m1, m2, v1, v2) {
+      const v1_ = ((m1 - m2) / (m1 + m2)) * v1 + ((2 * m2) / (m1 + m2)) * v2;
+      const v2_ = ((2 * m1) / (m1 + m2)) * v1 + ((m2 - m1) / (m1 + m2)) * v2;
+      return [v1_, v2_];
+    }
+
     class Node {
       constructor() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
+        this.mass = MASS_MIN + Math.random() * (MASS_MAX - MASS_MIN);
 
         this.vx = (Math.random() - 0.5) * 2;
         this.vy = (Math.random() - 0.5) * 2;
@@ -86,7 +98,13 @@
 
       draw() {
         ctx.beginPath();
-        ctx.arc(this.x, this.y, RADIUS, 0, 2 * Math.PI);
+        ctx.arc(
+          this.x,
+          this.y,
+          (RADIUS * this.mass) / MASS_MAX,
+          0,
+          2 * Math.PI
+        );
         ctx.fillStyle = "#00d2ff";
         ctx.fill();
       }
@@ -166,19 +184,27 @@
             ctx.lineWidth = 1;
             ctx.stroke();
           }
+
+          //handle intermolecular collision
           if (distance <= COLLIDE_DISTANCE) {
-            const a = nodes[i].vx;
-            const b = nodes[i].vy;
-            nodes[i].vx = nodes[j].vx;
-            nodes[i].vy = nodes[j].vy;
-            nodes[j].vx = a;
-            nodes[j].vy = b;
+            const v1x = nodes[i].vx;
+            const v1y = nodes[i].vy;
+            const v2x = nodes[j].vx;
+            const v2y = nodes[j].vy;
 
             const n1 = nodes[i];
             const n2 = nodes[j];
-            const vx_mean = (n1.vx + n2.vx) / 2;
-            const vy_mean = (n1.vy + n2.vy) / 2;
+
+            const vx_mean = (v1x + v2x) / 2;
+            const vy_mean = (v1y + v2y) / 2;
             const wav_speed = Math.sqrt(vx_mean * vx_mean + vy_mean * vy_mean);
+
+            const new_vx = elasticCollisionVelocity(n1.mass, n2.mass, v1x, v2x);
+            const new_vy = elasticCollisionVelocity(n1.mass, n2.mass, v1y, v2y);
+            nodes[i].vx = new_vx[0];
+            nodes[i].vy = new_vy[0];
+            nodes[j].vx = new_vx[1];
+            nodes[j].vy = new_vy[1];
 
             waves.push(
               new Wave((n1.x + n2.x) / 2, (n1.y + n2.y) / 2, wav_speed)
@@ -186,6 +212,24 @@
           }
         }
       }
+
+      //update total energy
+      let total_energy = 0;
+      let total_mass = 0;
+      nodes.forEach((node) => {
+        total_energy +=
+          0.5 * node.mass * (node.vx * node.vx + node.vy * node.vy);
+        total_mass += node.mass;
+      });
+      const avg_ke = total_energy / NODE_COUNT;
+      const kelvin_scale = 120;
+      const temperature = avg_ke * kelvin_scale;
+
+      document.getElementById("tot_energy").innerText = total_energy.toFixed(2);
+      document.getElementById("tot_mass").innerText = `${total_mass.toFixed(
+        2
+      )} - ${((total_mass / (MASS_MAX * NODE_COUNT)) * 100).toFixed(2)}%`;
+      document.getElementById("temperature").innerText = temperature.toFixed(2);
 
       if (!isPaused) requestAnimationFrame(animate);
     }
