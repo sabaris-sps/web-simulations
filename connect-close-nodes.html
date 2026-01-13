@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Connect Close Nodes</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #111;
+        color: white;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <label for="radius">Radius</label>
+    <input
+      name="radius"
+      type="range"
+      id="radiusInp"
+      min="2"
+      max="15"
+      value="5"
+    />
+    <label for="connectDist">Connect Distance</label>
+    <input
+      name="connectDist"
+      type="range"
+      id="connectDistInp"
+      min="100"
+      max="250"
+      value="150"
+    />
+    <button id="pause-btn">Pause</button>
+    <canvas id="simCanvas"></canvas>
+  </body>
+
+  <script>
+    const canvas = document.getElementById("simCanvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = 900;
+    canvas.height = 400;
+
+    const NODE_COUNT = 80;
+    let CONNECT_DISTANCE = document.getElementById("connectDistInp").value;
+    let RADIUS = document.getElementById("radiusInp").value;
+    const COLLIDE_DISTANCE = RADIUS * 2;
+    const MAX_RAD = 25;
+    let nodes = [];
+    let waves = [];
+
+    let isPaused = false;
+    const pauseBtn = document.getElementById("pause-btn");
+    pauseBtn.addEventListener("click", () => {
+      isPaused = !isPaused;
+      if (!isPaused) {
+        pauseBtn.innerText = "Pause";
+        animate();
+      } else {
+        pauseBtn.innerText = "Resume";
+      }
+    });
+
+    class Node {
+      constructor() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+
+        //boundary
+        if (this.x <= 0 || this.x >= canvas.width) this.vx *= -1;
+        if (this.y <= 0 || this.y >= canvas.height) this.vy *= -1;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, RADIUS, 0, 2 * Math.PI);
+        ctx.fillStyle = "#00d2ff";
+        ctx.fill();
+      }
+    }
+
+    class Wave {
+      constructor(x, y, v) {
+        this.x = x;
+        this.y = y;
+        this.v = v;
+        this.radius = 0;
+        this.alive = true;
+      }
+
+      update() {
+        this.radius += this.v;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+        ctx.lineWidth = 3 + 10 * (this.radius / MAX_RAD);
+        const opacity = (1 - this.radius / MAX_RAD) * 0.7;
+        ctx.strokeStyle = `rgb(255,0,0, ${opacity})`;
+        ctx.stroke();
+      }
+    }
+
+    for (let i = 0; i < NODE_COUNT; i++) {
+      node = new Node();
+      overlapping = false;
+      for (let i = 0; i < nodes.length; i++) {
+        if (
+          Math.abs(nodes[i].x - node.x) < RADIUS * 2 &&
+          Math.abs(nodes[i].y - node.y) < RADIUS * 2
+        ) {
+          overlapping = true;
+          break;
+        }
+      }
+      if (overlapping) i--;
+      else nodes.push(node);
+    }
+
+    function animate() {
+      RADIUS = document.getElementById("radiusInp").value;
+      CONNECT_DISTANCE = document.getElementById("connectDistInp").value;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      nodes.forEach((node) => {
+        node.update();
+        node.draw();
+      });
+
+      waves.forEach((wave) => {
+        wave.update();
+        if (wave.radius < MAX_RAD) wave.draw();
+        else wave.alive = false;
+      });
+
+      waves = waves.filter((wave) => wave.alive);
+
+      //draw lines
+      for (let i = 0; i < NODE_COUNT; i++) {
+        for (let j = i + 1; j < NODE_COUNT; j++) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < CONNECT_DISTANCE) {
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            const opacity = 1 - distance / CONNECT_DISTANCE;
+            ctx.strokeStyle = `rgb(255,0,255, ${opacity})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+          if (distance <= COLLIDE_DISTANCE) {
+            const a = nodes[i].vx;
+            const b = nodes[i].vy;
+            nodes[i].vx = nodes[j].vx;
+            nodes[i].vy = nodes[j].vy;
+            nodes[j].vx = a;
+            nodes[j].vy = b;
+
+            const n1 = nodes[i];
+            const n2 = nodes[j];
+            const vx_mean = (n1.vx + n2.vx) / 2;
+            const vy_mean = (n1.vy + n2.vy) / 2;
+            const wav_speed = Math.sqrt(vx_mean * vx_mean + vy_mean * vy_mean);
+
+            waves.push(
+              new Wave((n1.x + n2.x) / 2, (n1.y + n2.y) / 2, wav_speed)
+            );
+          }
+        }
+      }
+
+      if (!isPaused) requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</html>
