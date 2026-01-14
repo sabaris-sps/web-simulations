@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Piston System</title>
+    <style>
+      body {
+        background: #0b1a2c;
+        color: #e5e7eb;
+      }
+
+      canvas {
+        border: 1px solid #1f2937;
+        background-color: #111827;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- controls -->
+    <div class="controls">
+      <label for="volume">Volume</label>
+      <input
+        type="range"
+        name="volume"
+        id="volumeInput"
+        min="50"
+        max="700"
+        value="300"
+      />
+      <label for="temperature">Temperature (k)</label>
+      <input
+        type="range"
+        name="temperature"
+        id="temperatureInput"
+        min="273"
+        max="1273"
+        value="573"
+      />
+      <label for="moles">moles</label>
+      <input
+        type="range"
+        name="moles"
+        id="molesInput"
+        min="1"
+        max="10"
+        value="2"
+      />
+      <button id="pauseBtn">Resume</button>
+    </div>
+    <canvas id="simCanvas"></canvas>
+  </body>
+
+  <script>
+    const simCanvas = document.getElementById("simCanvas");
+    const ctx = simCanvas.getContext("2d");
+    const pauseBtn = document.getElementById("pauseBtn");
+    let isPaused = true;
+    pauseBtn.addEventListener("click", () => {
+      if (isPaused) {
+        isPaused = false;
+        animate();
+        pauseBtn.innerText = "Pause";
+      } else {
+        isPaused = true;
+        pauseBtn.innerText = "Resume";
+      }
+    });
+
+    // inputs
+    const temperatureInput = document.getElementById("temperatureInput");
+    const volumeInput = document.getElementById("volumeInput");
+    const molesInput = document.getElementById("molesInput");
+
+    simCanvas.width = 500;
+    simCanvas.height = 700;
+
+    let NUM_PARTICLES = parseInt(molesInput.value) * 100;
+    const RADIUS = 2;
+    const particles = [];
+    let temp = parseInt(temperatureInput.value);
+    let vol = parseInt(volumeInput.value);
+    let speed = 0.25 * Math.sqrt(temp);
+
+    const pi = Math.PI;
+
+    function change_cos_sign(angle) {
+      new_angle = pi - angle;
+
+      while (new_angle < 0) new_angle += 2 * pi;
+      while (new_angle >= 2 * pi) new_angle -= 2 * pi;
+
+      return new_angle;
+    }
+    function change_sin_sign(angle) {
+      new_angle = 2 * pi - angle;
+
+      while (new_angle < 0) new_angle += 2 * pi;
+      while (new_angle >= 2 * pi) new_angle -= 2 * pi;
+
+      return new_angle;
+    }
+
+    class Particle {
+      constructor() {
+        this.x = Math.random() * simCanvas.width;
+        this.y = simCanvas.height - vol + Math.random() * vol;
+        this.angle = Math.random() * 2 * pi;
+        this.vx = speed * Math.cos(this.angle);
+        this.vy = speed * Math.sin(this.angle);
+      }
+
+      update() {
+        this.x += parseFloat(this.vx);
+        this.y += parseFloat(this.vy);
+
+        if (this.x <= 0 || this.x >= simCanvas.width) {
+          this.angle = change_cos_sign(this.angle);
+        }
+
+        if (this.y <= simCanvas.height - vol || this.y >= simCanvas.width) {
+          this.angle = change_sin_sign(this.angle);
+        }
+        this.vx = speed * Math.cos(this.angle);
+        this.vy = speed * Math.sin(this.angle);
+      }
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, RADIUS, 0, 2 * pi);
+        ctx.fillStyle = "rgba(239, 68, 68, 0.7)"; // Red
+        ctx.fill();
+      }
+    }
+
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      particle = new Particle();
+      overlapping = false;
+      for (let i = 0; i < particles.length; i++) {
+        if (
+          Math.abs(particles[i].x - particle.x) < RADIUS * 2 &&
+          Math.abs(particles[i].y - particle.y) < RADIUS * 2
+        ) {
+          overlapping = true;
+          break;
+        }
+      }
+      if (overlapping) i--;
+      else particles.push(particle);
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, simCanvas.width, simCanvas.height);
+      particles.forEach((particle) => {
+        particle.update();
+        particle.draw();
+      });
+
+      if (parseInt(temperatureInput.value) != temp) {
+        temp = parseInt(temperatureInput.value);
+        speed = 0.25 * Math.sqrt(temp);
+
+        particles.forEach((particle) => {
+          particle.vx = speed * Math.cos(particle.angle);
+          particle.vy = speed * Math.sin(particle.angle);
+        });
+      }
+      if (parseInt(volumeInput.value) != vol) vol = parseInt(volumeInput.value);
+
+      if (!isPaused) requestAnimationFrame(animate);
+    }
+  </script>
+</html>
